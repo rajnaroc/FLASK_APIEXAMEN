@@ -2,12 +2,15 @@ from email import message
 from flask import Flask,jsonify, request
 from flask_pymongo import PyMongo
 from flask_mysqldb import MySQL
+from bson import ObjectId
 
 app = Flask(__name__)
 
 # cuando lo hago en .env me da problemas Render por eso lo hago de esta forma y Docker
 
-app.config["MYSQL_URI"] = "mongodb+srv://rajnaroc:12345@cluster0.r5gm8.mongodb.net"
+app.config["MONGO_URI"] = "mongodb+srv://rajnaroc:12345@cluster0.r5gm8.mongodb.net/users"
+
+mongo = PyMongo(app)
 
 app.config["MYSQL_HOST"] = "bpg29qpszsnrjasj7qkn-mysql.services.clever-cloud.com"
 app.config["MYSQL_USER"] = "unwsd1t63zdgzubu"
@@ -15,7 +18,6 @@ app.config["MYSQL_PASSWORD"] = "2mse9FtX9bOu82e9hWiC"
 app.config["MYSQL_DB"] = "bpg29qpszsnrjasj7qkn"
 
 
-mongo = PyMongo()
 
 mysql = MySQL(app)
 
@@ -95,28 +97,35 @@ def deletemysqluser(id):
 ########################################################################
 # Empieza la api de mongo
 
+# Todos los usuarios de mongo
 @app.route('/get_mongousers', methods=["GET"])
 def getusersmongo():
-    user = mongo.db.user.find()
+    user = mongo.db.users.find()
     return jsonify(user)
 
+# Solo el usuario con id
+@app.route('/get_mongousers/<id>', methods=["GET"])
+def getusermongo(id):
+    user = mongo.db.users.find_one({"_id": ObjectId(id)})
+    return jsonify(user)
 
+# agregar el usuario a mongo
 @app.route('/add_mongousers', methods=["POST"])
-def method_name():
+def addmongo():
     nombre = request.json["nombre"]
     edad = request.json["edad"]
     numero = request.json["numero"]
     genero = request.json["genero"]
 
     if nombre and genero and numero and edad:
-        id = mongo.db.user.insert_one({
+        id = mongo.db.users.insert_one({
             "nombre": nombre,
             "edad": edad,
             "numero" : numero,
             "genero" : genero
             })
         valor = {
-            "id": str(id),
+            "id": str(id.inserted_id),
             "nombre": nombre,
             "edad": edad,
             "numero": numero,
@@ -126,9 +135,30 @@ def method_name():
     else:
         return jsonify({ "message": "falta un campo"})
 
+@app.route("/editmongo/<id>", methods=["PUT"])
+def editmongo(id):
+    nombre = request.json["nombre"]
+    edad = request.json["edad"]
+    numero = request.json["numero"]
+    genero = request.json["genero"]
+    
+    update = mongo.db.users.update_one({"_id": ObjectId(id)},{"$set":{
+        "nombre" : nombre,
+        "edad": edad,
+        "numero": numero,
+        "genero": genero
+    }})
+
+    return jsonify(update)
+
+@app.route("/deletemongo/<id>", methods=["DELETE"])
+def deletemongo(id):
+    mongo.db.users.delete_one({"_id": ObjectId(id)})
+    return jsonify({"message": "borrado el usuario" + id})
 
 def error_404(error):
     return jsonify({"message": "Pagina no encontrada"})
 
 if __name__ == "__main__":
+    app.register_error_handler(404,error_404)
     app.run()
